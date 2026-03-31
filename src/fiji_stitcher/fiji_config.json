@@ -1,0 +1,94 @@
+{
+  "FIJI_PATH": "D:/fiji-stable-win64-jdk/Fiji.app",
+  "FIJI_EXE": "D:/fiji-stable-win64-jdk/Fiji.app/ImageJ-win64.exe",
+  "STITCH_ALLOW_CYCLE2_COMPOSITE": false,
+  "STITCH_SKIP_EXISTING": true,
+  "AUTO_CROP_AFTER_STITCH": true,
+  "STITCHED_PARENT_DIR": "D:/Try_munan/FYP_LAST/results/stitched",
+  "DEFAULT_ROOT_DIR": "D:/Try_munan/FYP_LAST",
+  "RAW_DATA_DIR_NAME": "Raw_Data",
+  "AUTO_OPEN_RESULT": false,
+  "AUTO_USE_DEFAULT_PARAMS": true,
+  "DEFAULT_FUSION_METHOD": "Linear Blending",
+  "DEFAULT_REGRESSION_THRESHOLD": "0.30",
+  "DEFAULT_MAX_DISPLACEMENT": "2.50",
+  "DEFAULT_ABSOLUTE_DISPLACEMENT": "3.50",
+  "DEFAULT_COMPUTATION_MODE": "Save memory (but be slower)",
+  "DEFAULT_IMAGE_OUTPUT": "Write to disk",
+  "LOG_LEVEL": "INFO",
+  "INTERACTIVE": false,
+  "MAX_OPEN_FILES": 30,
+  "CROP_INPUT_DIR": "D:/Try_munan/FYP_LAST/results/stitched",
+  "CROP_OUTPUT_DIR": "D:/Try_munan/FYP_LAST/results/crop",
+  "CROP_MARGIN": 20,
+  "BATCH_OUTPUT_DIR": "D:/Try_munan/FYP_LAST/results/batch_features",
+  "BATCH_LOG_CSV": "batch_log.csv",
+  "BATCH_RESULT_CSV": "all_blocks_cell_features.csv",
+  "BATCH_STATE_CSV": "batch_state.csv",
+  "BATCH_OVERLAY_DIR": "overlays",
+  "BATCH_RESUME": true,
+  "BATCH_SAVE_OVERLAY": true,
+  "BATCH_DO_ALIGN": true,
+  "BATCH_ALIGN_METHOD": "phaseCorrelate",
+  "BATCH_SKIP_DONE": true,
+  "FEATURE_OUTPUT_DIR": "D:/Try_munan/FYP_LAST/results/compared_result",
+  "PREPROCESS": {
+    "AUTO_RUN": true,
+    "DRY_RUN": false,
+    "CYCLE1": true,
+    "CYCLE2": true
+  },
+  "SCORING": {
+    "POSITIVE_THRESHOLD": 5000,
+    "ER_PR_THRESHOLD_MODE": "otsu",
+    "ER_PR_MIN_POSITIVE_FRACTION": 0.01,
+    "HER2_THRESHOLDS": {
+      "3+": 15000,
+      "2+": 8000,
+      "1+": 3000
+    },
+    "HER2_USE_MEMBRANE_RING": true,
+    "HER2_FALLBACK_TO_CYTO_MEAN": true,
+    "HER2_MEMBRANE_RING_INNER_PX": 1,
+    "HER2_MEMBRANE_RING_OUTER_PX": 4,
+    "KI67_THRESHOLD": null,
+    "KI67_THRESHOLD_MODE": "hotspot_otsu",
+    "KI67_HOTSPOT_N_SEEDS": 3,
+    "KI67_HOTSPOT_MIN_SEP_PX": 20,
+    "KI67_HOTSPOT_RADIUS_PX": 150,
+    "KI67_HOTSPOT_MIN_CELLS": 10
+  },
+  "SEGMENTATION": {
+    "MODEL_TYPE": "nuclei",
+    "USE_GPU": true,
+    "DIAMETER": null,
+    "FLOW_THRESHOLD": 0.4,
+    "CELLPROB_THRESHOLD": 0.0,
+    "CHANNELS": [
+      0,
+      0
+    ]
+  },
+  "LOADER": {
+    "CHANNELS": [
+      "DAPI",
+      "HER2",
+      "PR",
+      "ER"
+    ],
+    "CYCLE2_CHANNELS": [
+      "DAPI",
+      "KI67"
+    ],
+    "DO_PREPROCESS": false,
+    "CLAHE_CLIP_LIMIT": 2.0,
+    "CLAHE_TILE_GRID_SIZE": [
+      8,
+      8
+    ],
+    "GAUSSIAN_BLUR_KERNEL": [
+      3,
+      3
+    ]
+  }
+}

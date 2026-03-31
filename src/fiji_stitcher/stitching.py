@@ -1,0 +1,225 @@
+import time
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+def init_imagej(config):
+    """
+    初始化 ImageJ - 返回 config，因为我们使用命令行模式
+    """
+    return config
+
+
+def configure_stitching_parameters(config, interactive):
+    from .ui import timeout_input
+
+    params = {
+        "fusion_method": str(config.get("DEFAULT_FUSION_METHOD", "Linear Blending")),
+        "regression_threshold": str(config.get("DEFAULT_REGRESSION_THRESHOLD", "0.30")),
+        "max_displacement": str(config.get("DEFAULT_MAX_DISPLACEMENT", "2.50")),
+        "absolute_displacement": str(config.get("DEFAULT_ABSOLUTE_DISPLACEMENT", "3.50")),
+        "computation_mode": str(config.get("DEFAULT_COMPUTATION_MODE", "Save memory (but be slower)")),
+        "image_output": str(config.get("DEFAULT_IMAGE_OUTPUT", "Write to disk")),
+    }
+
+    if not interactive or bool(config.get("AUTO_USE_DEFAULT_PARAMS", True)):
+        return params
+
+    print("\n" + "=" * 50)
+    print("拼接参数配置")
+    print("=" * 50)
+
+    change = timeout_input("是否调整拼接参数？(y/N)", "N", 5, True).strip().lower()
+    if change not in ("y", "yes"):
+        return params
+
+    print("\n请选择融合方法:")
+    print(" 1. Linear Blending")
+    print(" 2. Max Intensity")
+    print(" 3. Average")
+    print(" 4. None")
+    fusion_choice = timeout_input("请输入选择 [1]", "1", 5, True).strip() or "1"
+    fusion_map = {"1": "Linear Blending", "2": "Max Intensity", "3": "Average", "4": "None"}
+    params["fusion_method"] = fusion_map.get(fusion_choice, "Linear Blending")
+
+    params["regression_threshold"] = timeout_input(
+        "回归阈值(0-1) [%s]" % params["regression_threshold"],
+        params["regression_threshold"],
+        5,
+        True,
+    ).strip() or params["regression_threshold"]
+
+    params["max_displacement"] = timeout_input(
+        "最大/平均位移阈值 [%s]" % params["max_displacement"],
+        params["max_displacement"],
+        5,
+        True,
+    ).strip() or params["max_displacement"]
+
+    params["absolute_displacement"] = timeout_input(
+        "绝对位移阈值 [%s]" % params["absolute_displacement"],
+        params["absolute_displacement"],
+        5,
+        True,
+    ).strip() or params["absolute_displacement"]
+
+    print("\n请选择计算模式:")
+    print(" 1. Save memory (but be slower)")
+    print(" 2. Fast (but use more memory)")
+    compute_choice = timeout_input("请输入选择 [1]", "1", 5, True).strip() or "1"
+    if compute_choice == "2":
+        params["computation_mode"] = "Fast (but use more memory)"
+
+    return params
+
+
+def build_macro_command(
+    input_dir,
+    output_dir,
+    file_pattern,
+    params,
+    tile_config_name="TileConfiguration.txt",
+):
+    input_dir_ij = str(Path(input_dir).resolve()).replace("\\", "/")
+    output_dir_ij = str(Path(output_dir).resolve()).replace("\\", "/")
+
+    return """
+run("Grid/Collection stitching",
+    "type=[Unknown position] " +
+    "order=[All files in directory] " +
+    "directory=[%s] " +
+    "file_names=[%s] " +
+    "output_textfile_name=%s " +
+    "fusion_method=[%s] " +
+    "regression_threshold=%s " +
+    "max/avg_displacement_threshold=%s " +
+    "absolute_displacement_threshold=%s " +
+    "frame_range_to_compare=1 " +
+    "computation_parameters=[%s] " +
+    "image_output=[%s] " +
+    "output_directory=[%s]");
+""" % (
+        input_dir_ij,
+        file_pattern,
+        tile_config_name,
+        params["fusion_method"],
+        params["regression_threshold"],
+        params["max_displacement"],
+        params["absolute_displacement"],
+        params["computation_mode"],
+        params["image_output"],
+        output_dir_ij,
+    )
+
+
+def build_macro_command_from_tile_config(
+    input_dir,
+    output_dir,
+    layout_file,
+    params,
+):
+    input_dir_ij = str(Path(input_dir).resolve()).replace("\\", "/")
+    output_dir_ij = str(Path(output_dir).resolve()).replace("\\", "/")
+
+    return """
+run("Grid/Collection stitching",
+    "type=[Positions from file] " +
+    "order=[Defined by TileConfiguration] " +
+    "directory=[%s] " +
+    "layout_file=[%s] " +
+    "fusion_method=[%s] " +
+    "regression_threshold=%s " +
+    "max/avg_displacement_threshold=%s " +
+    "absolute_displacement_threshold=%s " +
+    "computation_parameters=[%s] " +
+    "image_output=[%s] " +
+    "output_directory=[%s]");
+""" % (
+        input_dir_ij,
+        layout_file,
+        params["fusion_method"],
+        params["regression_threshold"],
+        params["max_displacement"],
+        params["absolute_displacement"],
+        params["computation_mode"],
+        params["image_output"],
+        output_dir_ij,
+    )
+
+
+def execute_stitching_with_retry(ij, macro_cmd, logger, output_dir=None, max_retries=3):
+    """
+    使用 Fiji 命令行模式执行宏脚本
+    """
+    fiji_path = ij.get("FIJI_PATH") if isinstance(ij, dict) else ij
+    
+    for attempt in range(max_retries):
+        try:
+            # 创建临时宏文件
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ijm', delete=False) as f:
+                f.write(macro_cmd)
+                macro_file = f.name
+            
+            logger.info("Running stitching macro attempt %s/%s", attempt + 1, max_retries)
+            
+            # 使用 Fiji 命令行执行宏脚本
+            fiji_exe = Path(fiji_path) / "ImageJ-win64.exe"
+            if not fiji_exe.exists():
+                # 尝试其他可能的名称
+                fiji_exe = Path(fiji_path) / "Fiji.exe"
+            
+            if not fiji_exe.exists():
+                raise FileNotFoundError(f"Fiji executable not found at {fiji_path}")
+            
+            cmd = [
+                str(fiji_exe),
+                "--headless",
+                "--console",
+                "-macro", macro_file
+            ]
+            
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=3600  # 1小时超时
+            )
+            
+            # 清理临时文件
+            try:
+                Path(macro_file).unlink()
+            except:
+                pass
+            
+            if result.returncode == 0:
+                logger.info("Stitching macro finished successfully")
+                return True
+            else:
+                error_msg = result.stderr or result.stdout
+                logger.warning("Stitching macro returned code %s: %s", result.returncode, error_msg[:200])
+                if attempt < max_retries - 1:
+                    wait = (attempt + 1) * 10
+                    logger.info("Wait %s seconds before retry", wait)
+                    time.sleep(wait)
+        except subprocess.TimeoutExpired:
+            logger.error("Stitching macro timed out (attempt %s/%s)", attempt + 1, max_retries)
+            if attempt < max_retries - 1:
+                wait = (attempt + 1) * 10
+                logger.info("Wait %s seconds before retry", wait)
+                time.sleep(wait)
+        except Exception as e:
+            logger.exception("Stitching failed attempt %s/%s: %s", attempt + 1, max_retries, e)
+            if attempt < max_retries - 1:
+                wait = (attempt + 1) * 10
+                logger.info("Wait %s seconds before retry", wait)
+                time.sleep(wait)
+            else:
+                if output_dir is not None:
+                    try:
+                        for f in Path(output_dir).glob("TileConfiguration_*.txt"):
+                            f.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+    
+    return False

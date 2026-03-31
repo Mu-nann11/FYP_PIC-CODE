@@ -1,0 +1,31 @@
+# TMA Image Analysis Pipeline Dependencies
+# Primary environment: cellpose (Python 3.10.20)
+
+# Deep Learning / Segmentation
+cellpose>=4.1.0
+segment-anything>=1.0
+torch>=2.0.0
+
+# Image Processing
+scikit-image>=0.24.0
+opencv-python>=4.10.0
+pyimagej>=1.8.1
+tifffile>=2024.0.0
+Pillow>=10.0.0
+
+# Fiji/ImageJ (external tool, not pip install)
+# Download from: https://fiji.sc/
+# Set FIJI_PATH in config.py
+
+# Scientific Computing
+numpy>=1.26.0
+scipy>=1.14.0
+pandas>=2.2.0
+
+# Visualization
+matplotlib>=3.9.0
+seaborn>=0.13.0
+
+# Utilities
+tqdm>=4.66.0
+PyYAML>=6.0.0

@@ -1,7 +1,69 @@
-# Ignore everything except figures
+# Ignore everything
 *
-!*/
-!.gitignore
-!results/figures/
-!results/figures/*
+
+# Exceptions for essential files
+!src/
+!src/**
+!results/
+!results/**
 !README.md
+!.gitignore
+
+# Exclude large data files
+Raw_Data/
+*.tif
+*.tiff
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+environments/
+
+# Logs
+*.log
+logs/
+pipeline_logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Large output files
+*.csv
+*.npy
+*.npz
+
+# Mac
+.DS_Store

@@ -1,29 +1,74 @@
-# FYP TMA Image Analysis - Results
+# FYP_LAST - TMA Image Analysis
 
-This repository contains the figures generated from the Breast Cancer Tissue Microarray (TMA) analysis pipeline.
+Automated breast cancer tissue microarray (TMA) analysis using deep learning.
+
+## Repository Structure
+
+```
+FYP_PIC-CODE/
+├── src/                      # Source code (organized by module)
+├── results/figures/          # Generated figures (Figure 5, 6, 7)
+├── Raw_Data/                 # Input data (not included, see below)
+└── README.md
+```
 
 ## Figures
 
-### Figure 5: Cell Segmentation Results
-- `figure5_cell_segmentation_results_A1.png/pdf` - Cell segmentation for block A1
-- `figure5_cell_segmentation_results_H2.png/pdf` - Cell segmentation for block H2
-- `figure5_cell_segmentation_results_J10.png/pdf` - Cell segmentation for block J10
+| Figure | Description |
+|--------|-------------|
+| Figure 5 | Cell Segmentation Results (A1, H2, J10 blocks) |
+| Figure 6 | Molecular Subtype Distribution |
+| Figure 7 | Feature Table Preview |
+| Figure 7b | Marker Summary Statistics |
 
-### Figure 6: Molecular Subtype Distribution
-- `figure6_molecular_subtype_distribution.png/pdf` - Distribution charts
-- `figure6_subtype_statistics.csv` - Subtype statistics
+## Source Code
 
-### Figure 7: Feature Table Preview
-- `figure7_feature_table_preview.png/pdf` - Feature table visualization
-- `figure7b_marker_summary.png/pdf` - Marker summary statistics
+The source code is organized in the `src/` directory:
 
-### Additional Figures
-- `HER2_otsu_grading_illustration.png/pdf` - HER2 grading explanation
-- `HER2_otsu_grading_illustration_v2.png/pdf` - Updated HER2 grading
-- `positive_cells_4channel_comparison.png/pdf` - 4-channel comparison
+```
+src/
+├── pipeline/           # Main analysis pipeline
+├── segmentation/       # Cell segmentation (CPSAM + CellPose)
+├── alignment/          # Multi-channel image registration
+├── calibration/        # Threshold calibration
+├── visualization/     # Figure generation
+├── fiji_stitcher/      # Fiji tile stitching integration
+└── preprocessing/      # Data preprocessing
+```
 
-## Project
+See [src/README.md](src/README.md) for detailed documentation.
 
-This work is part of the Final Year Project (FYP) on automated TMA image analysis using deep learning.
+## Quick Start
 
-**Related Repository**: [FYP_LAST](https://github.com/munan243/FYP_LAST)
+```bash
+# 1. Clone repository
+git clone https://github.com/Mu-nann11/FYP_PIC-CODE.git
+cd FYP_PIC-CODE
+
+# 2. Setup environment
+conda create -n tma python=3.10
+conda activate tma
+pip install -r src/requirements.txt
+
+# 3. Run pipeline
+python -m src.pipeline.main --dataset TMAd --blocks G2
+
+# 4. Generate figures
+python -m src.visualization.figure5_cell_segmentation_results
+```
+
+## Scientific Context
+
+This project implements automated analysis of breast cancer tissue microarrays for:
+
+1. **Cell Segmentation**: CPSAM cytoplasm + CellPose nuclei
+2. **Biomarker Scoring**: HER2, ER, PR, Ki67
+3. **Molecular Subtyping**: Luminal A/B, HER2+, Triple Negative
+
+## License
+
+MIT License
+
+## Author
+
+ZENG QINAN (Mu-nann11)
