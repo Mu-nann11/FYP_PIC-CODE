@@ -47,7 +47,7 @@ def analyze_her2_distribution():
     sample_her2_data = {}
     
     for block, info in SAMPLES.items():
-        csv_path = SEGMENTATION_DIR / block / f"{block}_features.csv"
+        csv_path = SEGMENTATION_DIR / "TMAd" / block / f"{block}_TMAd_features.csv"
         if not csv_path.exists():
             print(f"❌ {block}: 文件不存在")
             continue

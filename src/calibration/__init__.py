@@ -7,7 +7,7 @@ Workflow:
 
 数据依赖：
     阴性 Block 需先经 Step 1 (Fiji Stitching) → Step 2 (Alignment) → Step 3 (Segmentation)
-    → results/segmentation/{block}/{block}_features.csv
+    → results/segmentation/{dataset}/{block}/{block}_{dataset}_features.csv
 """
 
 from .config import (

@@ -1,11 +1,11 @@
 """
-TMA 图像分析统一流水线 - 主入口
+TMA image analysis pipeline - main entry point.
 
-用法:
+Usage:
     python -m pipeline.main --dataset TMAd --blocks G2 A2 B8
     python -m pipeline.main --dataset TMAd --all-blocks
     python -m pipeline.main --dataset TMAd --blocks G2 --from-step 2   # skip stitching
-    python -m pipeline.main --dataset TMAd --blocks G2 --from-step 3   # skip stitching+alignment
+    python -m pipeline.main --dataset TMAd --blocks G2 --from-step 3   # skip stitching + alignment
     python -m pipeline.main --dataset TMAd --blocks G2 --from-step 4   # only grading/subtyping
     python -m pipeline.main --dataset TMAd --blocks G2 --force          # force rerun
 """
@@ -44,7 +44,7 @@ try:
     from .utils.logging import setup_logging, get_logger
     from .utils.report import BlockResult, generate_report
 except ImportError:
-    # 直接运行时（python main.py 或 python -m pipeline.main）使用绝对导入
+    # When run directly (python main.py or python -m pipeline.main), use absolute imports
     _parent = str(Path(__file__).resolve().parent.parent)
     if _parent not in sys.path:
         sys.path.insert(0, _parent)
@@ -71,12 +71,12 @@ except ImportError:
 
 
 # =====================================================================
-# 命令行参数
+# Command-line arguments
 # =====================================================================
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="TMA 图像分析统一流水线：拼接 -> 配准 -> 分割",
+        description="TMA image analysis pipeline: stitching -> alignment -> segmentation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -84,17 +84,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--dataset",
         default="TMAd",
         choices=list(DATASETS.keys()),
-        help="数据集名称（default: TMAd）",
+        help="Dataset name (default: TMAd)",
     )
     parser.add_argument(
         "--blocks",
         nargs="+",
-        help="要处理的 Block 列表，如 G2 A2 B8",
+        help="Blocks to process, e.g. G2 A2 B8",
     )
     parser.add_argument(
         "--all-blocks",
         action="store_true",
-        help="自动发现并处理该数据集的所有 Block",
+        help="Automatically discover and process all blocks for this dataset",
     )
     parser.add_argument(
         "--from-step",
@@ -102,39 +102,39 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[0, 1, 2, 3, 4, 5, 6],
         default=1,
         help=(
-            "从哪一步开始执行："
-            "0=预处理（瓦片转通道）, 1=拼接（默认）, 2=配准（跳过拼接）, 3=分割（跳过拼接和配准）, "
-            "4=分级+亚型分类, 5=配准可视化, 6=汇总可视化"
+            "Start execution from step: "
+            "0=preprocessing (tile-to-channel), 1=stitching (default), 2=alignment (skip stitching), 3=segmentation (skip stitching and alignment), "
+            "4=grading + subtype classification, 5=alignment visualization, 6=summary visualization"
         ),
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="强制重新执行（忽略断点续传检查）",
+        help="Force re-run (ignore resume/checkpoint checks)",
     )
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="安静模式（仅输出日志到文件，不打印到控制台）",
+        help="Quiet mode (log only to file, do not print to console)",
     )
     parser.add_argument(
         "--save-report",
         action="store_true",
         default=True,
-        help="保存运行报告（default: True）",
+        help="Save run report (default: True)",
     )
     parser.add_argument(
         "--log-dir",
         type=Path,
         default=None,
-        help="日志输出目录（default: results/pipeline_logs）",
+        help="Log output directory (default: results/pipeline_logs)",
     )
 
     return parser
 
 
 # =====================================================================
-# 流水线执行
+# Pipeline execution
 # =====================================================================
 
 def run_pipeline(
@@ -144,16 +144,16 @@ def run_pipeline(
     force: bool = False,
 ) -> list[BlockResult]:
     """
-    对指定 blocks 执行完整流水线
+    Run the full pipeline for the specified blocks.
 
     Args:
-        dataset: 数据集名称
-        blocks: Block 列表
-        from_step: 从哪一步开始（1=拼接, 2=配准, 3=分割）
-        force: 是否强制重新执行
+        dataset: Dataset name.
+        blocks: Block list.
+        from_step: Starting step (1=stitching, 2=alignment, 3=segmentation).
+        force: Whether to force a re-run.
 
     Returns:
-        list[BlockResult]: 每个 block 的处理结果
+        list[BlockResult]: Results for each block.
     """
     results: list[BlockResult] = []
     total = len(blocks)
@@ -194,7 +194,7 @@ def run_pipeline(
                 logger.error(f"[Step 1] Stitching failed: {stitch_res.get('error')}")
                 block_result.end_time = datetime.now()
                 results.append(block_result)
-                continue  # 拼接失败则跳过后续步骤
+                continue  # Skip the remaining steps if stitching fails
         else:
             skipped = check_stitch_done(block, dataset)
             block_result.stitch_status = "skipped"
@@ -213,7 +213,7 @@ def run_pipeline(
                 logger.error(f"[Step 2] Alignment failed: {align_res.get('error')}")
                 block_result.end_time = datetime.now()
                 results.append(block_result)
-                continue  # 配准失败则跳过分割
+                continue  # Skip segmentation if alignment fails
         else:
             skipped = check_alignment_done(block, dataset)
             block_result.align_status = "skipped"
@@ -240,7 +240,7 @@ def run_pipeline(
 
         # ----- Step 4: Grading and Molecular Subtype Classification -----
         if from_step <= 4:
-            logger.info(f"[Step 4] Grading and Molecular Subtype Classification ...")
+            logger.info(f"[Step 4] Grading and molecular subtype classification ...")
             grade_res = run_grading_and_subtyping(block, dataset, force=force)
             block_result.grading_status = grade_res["status"]
             block_result.grading_error = grade_res.get("error")
@@ -257,7 +257,7 @@ def run_pipeline(
 
         # ----- Step 5: Alignment Visualization -----
         if from_step <= 5:
-            logger.info(f"[Step 5] Alignment Visualization ...")
+            logger.info(f"[Step 5] Alignment visualization ...")
             try:
                 vis_res = run_visualization_alignment([block], dataset, force=force)
                 if vis_res:
@@ -291,27 +291,27 @@ def run_pipeline(
 
 
 # =====================================================================
-# 主函数
+# Main function
 # =====================================================================
 
 def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    # 设置日志
+    # Configure logging
     logger = setup_logging(
         log_dir=args.log_dir,
         quiet=args.quiet,
     )
 
     logger.info("=" * 60)
-    logger.info("TMA Pipeline - 图像拼接 / 配准 / 分割统一流水线")
+    logger.info("TMA Pipeline - unified stitching / alignment / segmentation pipeline")
     logger.info(f"Dataset   : {args.dataset}")
     logger.info(f"From step : {args.from_step}")
     logger.info(f"Force     : {args.force}")
     logger.info("=" * 60)
 
-    # 确定要处理的 blocks
+    # Determine which blocks to process
     if args.all_blocks:
         blocks = discover_blocks(args.dataset)
         logger.info(f"Auto-discovered {len(blocks)} blocks: {blocks}")
@@ -319,15 +319,15 @@ def main():
         blocks = args.blocks
         logger.info(f"Processing {len(blocks)} blocks: {blocks}")
     else:
-        logger.error("请指定 --blocks 或 --all-blocks")
+        logger.error("Please specify --blocks or --all-blocks")
         parser.print_help()
         sys.exit(1)
 
     if not blocks:
-        logger.error(f"没有找到任何 Block（dataset={args.dataset}）")
+        logger.error(f"No blocks found (dataset={args.dataset})")
         sys.exit(1)
 
-    # 执行流水线
+    # Run the pipeline
     start_time = datetime.now()
     results = run_pipeline(
         dataset=args.dataset,
@@ -337,10 +337,10 @@ def main():
     )
     total_duration = (datetime.now() - start_time).total_seconds()
 
-    # ----- Step 6: Summary Visualization (跨块汇总） -----
+    # ----- Step 6: Summary Visualization (cross-block summary) -----
     if args.from_step <= 6:
         logger.info(f"\n{'='*60}")
-        logger.info(f"[Step 6] Running Summary Visualization...")
+        logger.info(f"[Step 6] Running summary visualization...")
         logger.info(f"{'='*60}")
         try:
             run_visualization_summary(blocks, BASE_DIR, force=args.force)
@@ -352,7 +352,7 @@ def main():
     logger.info(f"Pipeline finished in {total_duration:.1f}s")
     logger.info(f"{'='*60}")
 
-    # 生成报告
+    # Generate report
     if args.save_report:
         report = generate_report(
             dataset=args.dataset,
@@ -362,7 +362,7 @@ def main():
         )
         logger.info(f"\nReport saved.")
 
-    # 退出码
+    # Exit code
     errors = sum(1 for b in results if b.overall_status == "error")
     sys.exit(1 if errors else 0)
 

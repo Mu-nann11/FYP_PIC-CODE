@@ -33,8 +33,32 @@ CLINICAL_REPORT_DIR.mkdir(exist_ok=True)
 # 阈值文件
 THRESHOLD_FILE = CALIBRATION_DIR / "thresholds_raw_nuclei.json"
 
-# 所有blocks列表
-ALL_BLOCKS = ["A1", "A8", "D1", "E10", "G1", "H10", "H2", "J10"]
+# All blocks are dynamically discovered from TMAd / TMAe directories
+# (see get_all_available_blocks() below)
+
+
+def get_all_available_blocks():
+    """Discover all available blocks by scanning TMAd and TMAe directories."""
+    blocks = []
+    for dataset in ["TMAd", "TMAe"]:
+        dataset_dir = SEGMENTATION_DIR / dataset
+        if not dataset_dir.exists():
+            continue
+        for block_dir in dataset_dir.iterdir():
+            if block_dir.is_dir():
+                features_file = block_dir / f"{block_dir.name}_{dataset}_features.csv"
+                if features_file.exists():
+                    blocks.append(block_dir.name)
+    return sorted(set(blocks))
+
+
+def infer_dataset_for_block(block_name):
+    """Infer dataset by checking segmentation file locations."""
+    for dataset in ["TMAd", "TMAe"]:
+        candidate = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
+        if candidate.exists():
+            return dataset
+    return None
 
 
 def load_thresholds():
@@ -177,16 +201,22 @@ def detect_available_channels(block_df):
 
 def apply_universal_grading(all_results_dict):
     """为所有blocks应用通用通道分级"""
+    all_blocks = get_all_available_blocks()
     print("\n" + "="*80)
-    print("🔄 第二步：为所有blocks应用通道分级")
+    print(f"🔄 第二步：为 {len(all_blocks)} 个blocks应用通道分级")
     print("="*80 + "\n")
-    
+
     graded_blocks = {}
-    
-    for block_name in sorted(ALL_BLOCKS):
+
+    for block_name in sorted(all_blocks):
         print(f"📊 处理Block: {block_name}")
-        
-        features_file = SEGMENTATION_DIR / block_name / f"{block_name}_features.csv"
+
+        dataset = infer_dataset_for_block(block_name)
+        if dataset is None:
+            print(f"  ⚠️ 未找到分割结果（TMAd/TMAe）\n")
+            continue
+
+        features_file = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
         if not features_file.exists():
             print(f"  ⚠️ 文件不存在\n")
             continue
@@ -217,9 +247,9 @@ def apply_universal_grading(all_results_dict):
             )
         
         # 保存分级后的CSV
-        output_file = SEGMENTATION_DIR / block_name / f"{block_name}_features_graded_universal.csv"
+        output_file = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features_graded_universal.csv"
         df.to_csv(output_file, index=False)
-        graded_blocks[block_name] = df
+        graded_blocks[block_name] = {"dataset": dataset, "df": df}
         print(f"  ✓ 已保存: {output_file.name}\n")
     
     return graded_blocks
@@ -331,20 +361,20 @@ def generate_block_report(block_name, block_df, all_thresholds):
     return report_text, summary_data
 
 
-def save_block_report(block_name, report_text, summary_data):
+def save_block_report(block_name, dataset, report_text, summary_data):
     """保存block的报告"""
-    block_report_dir = CLINICAL_REPORT_DIR / block_name
+    block_report_dir = CLINICAL_REPORT_DIR / dataset / block_name
     block_report_dir.mkdir(parents=True, exist_ok=True)
     
     # 保存文本报告
-    report_file = block_report_dir / f"{block_name}_clinical_report_universal.txt"
+    report_file = block_report_dir / f"{block_name}_{dataset}_clinical_report_universal.txt"
     with open(report_file, 'w', encoding='utf-8') as f:
         f.write(report_text)
     
     # 保存CSV统计
     if summary_data:
         summary_df = pd.DataFrame(summary_data)
-        csv_file = block_report_dir / f"{block_name}_expression_statistics_universal.csv"
+        csv_file = block_report_dir / f"{block_name}_{dataset}_expression_statistics_universal.csv"
         summary_df.to_csv(csv_file, index=False)
     
     return report_file
@@ -358,15 +388,16 @@ def generate_reports_for_all_blocks(graded_blocks, all_thresholds):
     
     for block_name in sorted(graded_blocks.keys()):
         print(f"📄 生成 {block_name} 的报告...")
-        
-        block_df = graded_blocks[block_name]
+
+        block_df = graded_blocks[block_name]["df"]
+        dataset = graded_blocks[block_name]["dataset"]
         report_text, summary_data = generate_block_report(block_name, block_df, all_thresholds)
         
         if report_text is None:
             print(f"  ⚠️ 无法生成报告（无可用通道）\n")
             continue
         
-        save_block_report(block_name, report_text, summary_data)
+        save_block_report(block_name, dataset, report_text, summary_data)
         print(f"  ✓ 已保存\n")
 
 
@@ -377,13 +408,17 @@ def main():
     print("="*80)
     
     # Step 1: 加载所有数据并计算Otsu阈值
+    all_blocks = get_all_available_blocks()
     print("\n" + "="*80)
-    print("第一步：从所有blocks收集数据并计算各通道Otsu分界线")
+    print(f"第一步：从 {len(all_blocks)} 个blocks收集数据并计算各通道Otsu分界线")
     print("="*80 + "\n")
-    
+
     all_data_df = []
-    for block_name in sorted(ALL_BLOCKS):
-        features_file = SEGMENTATION_DIR / block_name / f"{block_name}_features.csv"
+    for block_name in sorted(all_blocks):
+        dataset = infer_dataset_for_block(block_name)
+        if dataset is None:
+            continue
+        features_file = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
         if features_file.exists():
             df = pd.read_csv(features_file)
             all_data_df.append(df)
@@ -419,10 +454,13 @@ def main():
     print("="*80)
     print(f"\n输出位置: {CLINICAL_REPORT_DIR}")
     print("\n每个block的文件:")
-    for block_name in sorted(ALL_BLOCKS):
-        block_dir = CLINICAL_REPORT_DIR / block_name
+    for block_name in sorted(all_blocks):
+        dataset = infer_dataset_for_block(block_name)
+        if dataset is None:
+            continue
+        block_dir = CLINICAL_REPORT_DIR / dataset / block_name
         if block_dir.exists():
-            print(f"\n{block_name}:")
+            print(f"\n{dataset}/{block_name}:")
             for file in sorted(block_dir.glob("*universal*")):
                 print(f"  - {file.name}")
 

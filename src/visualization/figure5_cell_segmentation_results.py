@@ -14,13 +14,21 @@ warnings.filterwarnings('ignore')
 
 # Configuration
 BLOCK = "H2"  # Nuclei=5034, Cyto=6505
+DATASET = "TMAd"
 RESULTS_DIR = Path(r"d:\Try_munan\FYP_LAST\results")
 OUTPUT_DIR = RESULTS_DIR / "figures"
 
 # Paths
-DAPI_PATH = RESULTS_DIR / "registered" / BLOCK / f"{BLOCK}_Cycle1_DAPI.tif"
-CYTO_PATH = RESULTS_DIR / "segmentation" / BLOCK / f"{BLOCK}_cyto_masks.tif"
-NUC_PATH = RESULTS_DIR / "segmentation" / BLOCK / f"{BLOCK}_nuclei_masks.tif"
+DAPI_PATH = RESULTS_DIR / "registered" / DATASET / "Cycle1" / BLOCK / f"{BLOCK}_{DATASET}_Cycle1_DAPI.tif"
+CYTO_PATH = RESULTS_DIR / "segmentation" / DATASET / BLOCK / f"{BLOCK}_{DATASET}_cyto_masks.tif"
+NUC_PATH = RESULTS_DIR / "segmentation" / DATASET / BLOCK / f"{BLOCK}_{DATASET}_nuclei_masks.tif"
+
+if not DAPI_PATH.exists():
+    DAPI_PATH = RESULTS_DIR / "registered" / BLOCK / f"{BLOCK}_Cycle1_DAPI.tif"
+if not CYTO_PATH.exists():
+    CYTO_PATH = RESULTS_DIR / "segmentation" / BLOCK / f"{BLOCK}_cyto_masks.tif"
+if not NUC_PATH.exists():
+    NUC_PATH = RESULTS_DIR / "segmentation" / BLOCK / f"{BLOCK}_nuclei_masks.tif"
 
 
 def load_image(path):
@@ -178,11 +186,11 @@ def create_figure():
                bbox_to_anchor=(0.5, 0.01), edgecolor='black')
 
     # Add subtitle
-    fig.text(0.5, 0.94, f'Block: {BLOCK} | 细胞质掩膜: CPSAM (her2_wholecell_v3) | 核掩膜: Cellpose v3',
+    fig.text(0.5, 0.94, f'Block: {BLOCK} | Cytoplasm Mask: CPSAM (her2_wholecell_v3) | Nuclei Mask: Cellpose v3',
              ha='center', fontsize=10, style='italic', color='gray')
 
     # Add ROI coordinates annotation
-    fig.text(0.02, 0.5, f'ROI区域\ny: {roi_y}\nx: {roi_x}\n大小: {roi_h}×{roi_w}',
+    fig.text(0.02, 0.5, f'ROI Region\ny: {roi_y}\nx: {roi_x}\nSize: {roi_h}x{roi_w}',
              fontsize=9, va='center', ha='left',
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
 

@@ -13,8 +13,14 @@ Step 3: 细胞分割 (Segmentation)
 
 import subprocess
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Optional
+
+try:
+    from tqdm.auto import tqdm
+except Exception:
+    tqdm = None
 
 from ..config import (
     CELLPOSE_ENV_PYTHON,
@@ -45,22 +51,64 @@ def check_segmentation_done(block: str, dataset: str) -> bool:
     Returns:
         bool: 特征 CSV 文件存在则视为已完成
     """
-    p = get_segmentation_path(block, dataset, "features")
-    return p.exists()
+    return _resolve_segmentation_feature_path(block, dataset).exists()
+
+
+def _resolve_segmentation_feature_path(block: str, dataset: str) -> Path:
+    """Resolve the current feature CSV path, with legacy fallbacks."""
+    base_dir = get_segmentation_path(block, dataset)
+    candidates = [
+        get_segmentation_path(block, dataset, "features"),
+        base_dir / f"{block}_features.csv",
+        SEGMENTATION_DIR / block / f"{block}_features.csv",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return candidates[0]
 
 
 def _check_inputs_exist(block: str, dataset: str) -> bool:
     """检查配准结果是否存在"""
-    reg_dir = get_registered_path(block, dataset)
-    required = [
-        f"{block}_Cycle1_DAPI.tif",
-        f"{block}_Cycle1_HER2_aligned.tif",
-        f"{block}_Cycle1_PR_aligned.tif",
-        f"{block}_Cycle1_ER_aligned.tif",
-    ]
+    reg_dir = get_registered_path(block, dataset, cycle="Cycle1")
+
+    for ch in ["DAPI", "HER2", "PR", "ER"]:
+        if _resolve_registered_input_path(reg_dir, block, dataset, ch) is None:
+            return False
+
     if dataset != "TMAe":
-        required.append(f"{block}_KI67_aligned.tif")
-    return all((reg_dir / f).exists() for f in required)
+        if _resolve_registered_input_path(reg_dir, block, dataset, "KI67") is None:
+            return False
+
+    return True
+
+
+def _resolve_registered_input_path(
+    reg_dir: Path,
+    block: str,
+    dataset: str,
+    channel: str,
+) -> Optional[Path]:
+    """Resolve registered input path across legacy and current filename conventions."""
+    ch = channel.upper()
+
+    candidates = [
+        reg_dir / f"{block}_{dataset}_Cycle1_{ch}.tif",
+    ]
+
+    # TMAe alignment currently writes files without the Cycle1 token.
+    if dataset == "TMAe" and ch in {"DAPI", "HER2", "PR", "ER"}:
+        candidates.append(reg_dir / f"{block}_{dataset}_{ch}.tif")
+
+    if ch == "KI67":
+        candidates.append(reg_dir / f"{block}_{dataset}_KI67.tif")
+
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
 
 
 # =====================================================================
@@ -118,12 +166,23 @@ def run_segmentation(
             "error": f"Script not found: {seg_script}",
         }
 
-    reg_dir = get_registered_path(block, dataset)
-    dapi = reg_dir / f"{block}_Cycle1_DAPI.tif"
-    her2 = reg_dir / f"{block}_Cycle1_HER2_aligned.tif"
-    pr = reg_dir / f"{block}_Cycle1_PR_aligned.tif"
-    er = reg_dir / f"{block}_Cycle1_ER_aligned.tif"
-    ki67 = reg_dir / f"{block}_KI67_aligned.tif" if dataset != "TMAe" else ""
+    reg_dir = get_registered_path(block, dataset, cycle="Cycle1")
+    dapi = _resolve_registered_input_path(reg_dir, block, dataset, "DAPI")
+    her2 = _resolve_registered_input_path(reg_dir, block, dataset, "HER2")
+    pr = _resolve_registered_input_path(reg_dir, block, dataset, "PR")
+    er = _resolve_registered_input_path(reg_dir, block, dataset, "ER")
+    ki67 = _resolve_registered_input_path(reg_dir, block, dataset, "KI67") if dataset != "TMAe" else None
+
+    if any(p is None for p in (dapi, her2, pr, er)):
+        return {
+            "status": "error",
+            "block": block,
+            "dataset": dataset,
+            "error": "Registered images not found, run alignment first",
+        }
+
+    # 根据数据集选择输出目录
+    output_dir = SEGMENTATION_DIR / dataset
 
     cmd = [
         str(CELLPOSE_ENV_PYTHON),
@@ -133,8 +192,8 @@ def run_segmentation(
         "--her2", str(her2),
         "--pr", str(pr),
         "--er", str(er),
-        "--ki67", str(ki67),
-        "--output-dir", str(SEGMENTATION_DIR),
+        "--ki67", str(ki67) if ki67 else "",
+        "--output-dir", str(output_dir),
         "--model", str(CELLPOSE_MODEL_PATH),
         "--diameter", str(SEGMENT_PARAMS["diameter"]),
         "--flow-threshold", str(SEGMENT_PARAMS["flow_threshold"]),
@@ -149,12 +208,20 @@ def run_segmentation(
     logger.info(f"[Segment] Running: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=7200,  # 2小时超时
+        progress_cm = (
+            tqdm(total=1, desc=f"[Step 3] {block}", unit="run", leave=False, dynamic_ncols=True)
+            if tqdm is not None
+            else nullcontext(None)
         )
+        with progress_cm as progress:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=7200,  # 2小时超时
+            )
+            if progress is not None:
+                progress.update(1)
 
         if result.returncode != 0:
             logger.error(f"[Segment] {block} failed: {result.stderr[:500]}")
@@ -199,7 +266,7 @@ def run_segmentation(
 
 def _read_cell_count(block: str, dataset: str) -> int:
     """从特征 CSV 读取细胞数量"""
-    features_path = get_segmentation_path(block, dataset, "features")
+    features_path = _resolve_segmentation_feature_path(block, dataset)
     if not features_path.exists():
         return 0
     try:

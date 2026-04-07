@@ -1,10 +1,10 @@
 """
-生成校准直方图对比图 - 叠加显示所有通道
+Generate an overlaid calibration histogram comparison for all channels.
 
-用法：
+Usage:
     python generate_calibration_comparison.py
 
-输出：
+Outputs:
     results/calibration/calibration_comparison.png
     results/calibration/calibration_comparison.pdf
 """
@@ -19,16 +19,16 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.gridspec import GridSpec
 
-# ==================== 配置 ====================
+# ==================== Configuration ====================
 BASE_DIR = Path(r"d:\Try_munan\FYP_LAST")
 SEGMENTATION_DIR = BASE_DIR / "results" / "segmentation"
 CALIBRATION_DIR = BASE_DIR / "results" / "calibration"
 
-# 负对照 Block 定义
+# Negative control block definitions
 NEG_3CH_BLOCKS = ["A1", "D1", "E10", "H2", "H10", "J10"]
 NEG_KI67_BLOCKS = ["A8", "D1", "G1", "H10"]
 
-# 特征列名映射（根据 config.py）
+# Feature column mapping (per config.py)
 FEATURE_COLUMNS = {
     "ER": ("3ch_Neg", "ER_nuc_mean"),
     "PR": ("3ch_Neg", "PR_nuc_mean"),
@@ -36,97 +36,97 @@ FEATURE_COLUMNS = {
     "KI67": ("Ki67_Neg", "Ki67_nuc_mean"),
 }
 
-# 颜色方案（报告级别的专业色）
+# Color palette (report-friendly colors)
 COLORS = {
-    "ER": "#E74C3C",      # 红色
-    "PR": "#3498DB",      # 蓝色
-    "HER2": "#2ECC71",    # 绿色
-    "KI67": "#F39C12",    # 橙色
+    "ER": "#E74C3C",      # Red
+    "PR": "#3498DB",      # Blue
+    "HER2": "#2ECC71",    # Green
+    "KI67": "#F39C12",    # Orange
 }
 
-# 阈值数据（从 thresholds.json 读取）
+# Threshold data (loaded from thresholds.json)
 THRESHOLDS_FILE = CALIBRATION_DIR / "thresholds.json"
 
-# ==================== 函数 ====================
+# ==================== Functions ====================
 
 def load_thresholds() -> Dict:
-    """加载校准阈值 JSON"""
+    """Load the calibration threshold JSON."""
     with open(THRESHOLDS_FILE, "r") as f:
         return json.load(f)
 
 
 def load_channel_data(channel: str, neg_blocks: list, column: str) -> np.ndarray:
     """
-    加载指定通道的所有细胞强度数据
+    Load all cell-intensity values for a specific channel.
     
     Args:
-        channel: 通道名 (ER/PR/HER2/Ki67)
-        neg_blocks: 负对照 Block 列表
-        column: CSV 中的列名
+        channel: Channel name (ER/PR/HER2/Ki67)
+        neg_blocks: Negative-control block list
+        column: CSV column name
     
     Returns:
-        all_values: 所有负对照 Block 的细胞强度值
+        all_values: Intensity values across all negative-control blocks
     """
     all_values = []
     
     for block in neg_blocks:
-        csv_file = SEGMENTATION_DIR / block / f"{block}_features.csv"
+        csv_file = SEGMENTATION_DIR / "TMAd" / block / f"{block}_TMAd_features.csv"
         if not csv_file.exists():
-            print(f"  ⚠ 文件不存在: {csv_file}")
+            print(f"  [WARN] Missing file: {csv_file}")
             continue
         
         df = pd.read_csv(csv_file)
         if column not in df.columns:
-            print(f"  ⚠ 列不存在: {column} in {block}")
+            print(f"  [WARN] Missing column: {column} in {block}")
             continue
         
-        # 过滤无效数据（NaN, 0 等）
+        # Filter invalid data (NaN, 0, etc.)
         values = df[column].dropna()
-        values = values[values > 0]  # 只保留正值
+        values = values[values > 0]  # Keep positive values only
         all_values.extend(values.tolist())
-        print(f"  ✓ {block}: {len(values)} 个细胞")
+        print(f"  [OK] {block}: {len(values)} cells")
     
     return np.array(all_values)
 
 
 def plot_overlaid_histograms(thresholds: Dict) -> Tuple[plt.Figure, Dict]:
     """
-    生成叠加直方图
+    Generate overlaid histograms.
     
     Args:
-        thresholds: 从 thresholds.json 读取的阈值数据
+        thresholds: Threshold data loaded from thresholds.json
     
     Returns:
-        fig, axes: matplotlib figure 和统计数据字典
+        fig, stats: Matplotlib figure and statistics dictionary
     """
     fig, ax = plt.subplots(figsize=(14, 8), dpi=150)
     
     stats = {}
     
-    # 为每个通道绘制直方图
+    # Plot a histogram for each channel
     for channel, (neg_group, column) in FEATURE_COLUMNS.items():
         
-        # 确定负对照 Block 列表
+        # Determine the negative-control block list
         if neg_group == "3ch_Neg":
             neg_blocks = NEG_3CH_BLOCKS
         else:  # Ki67_Neg
             neg_blocks = NEG_KI67_BLOCKS
         
         print(f"\n{'='*60}")
-        print(f"处理通道: {channel}")
-        print(f"负对照 Block: {neg_blocks}")
-        print(f"特征列: {column}")
+        print(f"Processing channel: {channel}")
+        print(f"Negative-control blocks: {neg_blocks}")
+        print(f"Feature column: {column}")
         print(f"{'='*60}")
         
-        # 加载数据
+        # Load data
         values = load_channel_data(channel, neg_blocks, column)
         if len(values) == 0:
-            print(f"⚠ {channel} 没有有效数据，跳过")
+            print(f"[WARN] No valid data for {channel}; skipping")
             continue
         
-        print(f"总计: {len(values)} 个细胞")
+        print(f"Total: {len(values)} cells")
         
-        # 从 thresholds.json 获取统计信息
+        # Pull statistics from thresholds.json
         threshold_data = thresholds["channels"][channel][neg_group]
         mean = threshold_data["mean"]
         std = threshold_data["std"]
@@ -142,16 +142,16 @@ def plot_overlaid_histograms(thresholds: Dict) -> Tuple[plt.Figure, Dict]:
             "color": COLORS[channel],
         }
         
-        # 绘制直方图
+        # Plot histogram
         bins = np.linspace(np.min(values) * 0.9, np.max(values) * 1.1, 50)
         ax.hist(values, bins=bins, alpha=0.4, label=f"{channel} (n={n_cells})",
                 color=COLORS[channel], edgecolor="black", linewidth=0.5)
         
-        # 绘制阈值线（粗红线）
+        # Plot threshold line
         ax.axvline(threshold, color=COLORS[channel], linestyle="--", 
                    linewidth=2.5, label=f"{channel} threshold: {threshold:.1f}")
         
-        # 绘制平均值 ± 标准差区域
+        # Plot mean +/- standard deviation markers
         ax.axvline(mean, color=COLORS[channel], linestyle=":", 
                    linewidth=2, alpha=0.7)
         ax.axvline(mean - std, color=COLORS[channel], linestyle=":", 
@@ -159,14 +159,14 @@ def plot_overlaid_histograms(thresholds: Dict) -> Tuple[plt.Figure, Dict]:
         ax.axvline(mean + std, color=COLORS[channel], linestyle=":", 
                    linewidth=1, alpha=0.5)
         
-        # 在顶部添加样本数标注
+        # Add sample count label at the top
         y_pos = ax.get_ylim()[1] * 0.95
         ax.text(threshold, y_pos, f"n={n_cells}", 
                color=COLORS[channel], fontsize=10, fontweight="bold",
                ha="center", bbox=dict(boxstyle="round,pad=0.3", 
                facecolor="white", alpha=0.7, edgecolor=COLORS[channel]))
     
-    # 美化图表
+        # Style the chart
     ax.set_xlabel("Cell Intensity", fontsize=14, fontweight="bold")
     ax.set_ylabel("Frequency", fontsize=14, fontweight="bold")
     ax.set_title("Calibration Thresholds - Overlaid Histograms\n" +
@@ -182,51 +182,51 @@ def plot_overlaid_histograms(thresholds: Dict) -> Tuple[plt.Figure, Dict]:
 
 
 def create_summary_stats_panel(stats: Dict) -> str:
-    """生成统计信息面板"""
-    panel = "\n统计信息面板\n"
+    """Generate a statistics summary panel."""
+    panel = "\nStatistics Panel\n"
     panel += "=" * 70 + "\n"
     
     for channel, data in stats.items():
         panel += f"\n{channel}:\n"
-        panel += f"  样本数: {data['n_cells']}\n"
-        panel += f"  平均值: {data['mean']:.2f}\n"
-        panel += f"  标准差: {data['std']:.2f}\n"
-        panel += f"  阈值 (mean+2σ): {data['threshold']:.2f}\n"
-        panel += f"  数据范围: [{data['values'].min():.2f}, {data['values'].max():.2f}]\n"
+        panel += f"  Sample count: {data['n_cells']}\n"
+        panel += f"  Mean: {data['mean']:.2f}\n"
+        panel += f"  Standard deviation: {data['std']:.2f}\n"
+        panel += f"  Threshold (mean + 2*std): {data['threshold']:.2f}\n"
+        panel += f"  Data range: [{data['values'].min():.2f}, {data['values'].max():.2f}]\n"
     
     return panel
 
 
-# ==================== 主程序 ====================
+# ==================== Main Program ====================
 
 if __name__ == "__main__":
     print("\n" + "="*70)
-    print("生成校准直方图对比图")
+    print("Generating calibration histogram comparison")
     print("="*70)
     
-    # 加载阈值数据
-    print("\n➤ 加载阈值数据...")
+    # Load threshold data
+    print("\n➤ Loading threshold data...")
     thresholds = load_thresholds()
-    print(f"✓ 已加载，生成时间: {thresholds['generated_at']}")
+    print(f"[OK] Loaded; generated at: {thresholds['generated_at']}")
     
-    # 生成图表
-    print("\n➤ 生成叠加直方图...")
+    # Generate the plot
+    print("\n➤ Generating overlaid histograms...")
     fig, stats = plot_overlaid_histograms(thresholds)
     
-    # 保存文件
+    # Save files
     output_png = CALIBRATION_DIR / "calibration_comparison.png"
     output_pdf = CALIBRATION_DIR / "calibration_comparison.pdf"
     
-    print(f"\n➤ 保存文件...")
+    print("\n➤ Saving files...")
     fig.savefig(output_png, dpi=300, bbox_inches="tight")
-    print(f"✓ PNG 已保存: {output_png}")
+    print(f"[OK] PNG saved: {output_png}")
     
     fig.savefig(output_pdf, bbox_inches="tight")
-    print(f"✓ PDF 已保存: {output_pdf}")
+    print(f"[OK] PDF saved: {output_pdf}")
     
-    # 打印统计信息
+    # Print statistics
     print(create_summary_stats_panel(stats))
     
     print("\n" + "="*70)
-    print("✓ 完成！")
+    print("[OK] Done!")
     print("="*70)

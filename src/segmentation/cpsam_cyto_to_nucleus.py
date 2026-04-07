@@ -718,7 +718,7 @@ def parse_args():
             dapi=paths["dapi"], her2=paths["her2"],
             pr=paths["pr"], er=paths["er"], ki67=paths["ki67"],
             model=MODEL_PATH, block_name=BLOCK,
-            output_dir=str(SEGMENTATION_DIR),
+            output_dir=str(SEGMENTATION_DIR / "TMAe"),
             diameter=30, flow_threshold=0.4, cellprob_threshold=0.0,
             channels="0,1", min_nuc_area=30, max_area_ratio=0.8,
             use_cellpose_nuclei=use_nuclei, nuclei_diameter=None,
@@ -734,7 +734,7 @@ def parse_args():
     p.add_argument("--ki67", required=False, default="")
     p.add_argument("--model", required=True)
     p.add_argument("--block-name", required=True)
-    p.add_argument("--output-dir", default="results")
+    p.add_argument("--output-dir", default=str(SEGMENTATION_DIR / "TMAe"))
     p.add_argument("--diameter", type=int, default=30)
     p.add_argument("--flow-threshold", type=float, default=0.4)
     p.add_argument("--cellprob-threshold", type=float, default=0.0)
@@ -760,6 +760,7 @@ def main():
     print("=" * 60)
 
     ch0, ch1 = map(int, args.channels.split(","))
+    dataset_name = Path(args.output_dir).name
 
     # ── Output paths ──
     out_dir = Path(args.output_dir) / args.block_name
@@ -787,8 +788,8 @@ def main():
     path_overlay           = f"{prefix}_overlay.png"
 
     # CSV
-    path_csv               = f"{prefix}_features.csv"
-    path_csv_core          = f"{prefix}_features_core.csv"
+    path_csv               = f"{prefix}_{dataset_name}_features.csv"
+    path_csv_core          = f"{prefix}_{dataset_name}_features_core.csv"
 
     # ── Load all channels ──
     print("\n[1/7] Loading images …")
@@ -1020,8 +1021,8 @@ def main():
     print(f"    {prefix.name}_nucleus_cytoplasm.png")
     print(f"    {prefix.name}_all_channels.tif")
     print(f"    {prefix.name}_dapi_cyto_nuc.tif")
-    print(f"    {prefix.name}_features.csv")
-    print(f"    {prefix.name}_features_core.csv")
+    print(f"    {prefix.name}_{dataset_name}_features.csv")
+    print(f"    {prefix.name}_{dataset_name}_features_core.csv")
     print(f"    {prefix.name}_overlay.png")
     print(f"    {prefix.name}_all_channels.png")
     print(f"    {prefix.name}_dapi_cyto_nuc.png")

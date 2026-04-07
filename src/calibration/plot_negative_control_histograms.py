@@ -39,8 +39,15 @@ def load_negative_nuclei_data(blocks, channels):
     """加载阴性对照块的核强度数据"""
     all_data = []
     for block in blocks:
-        csv_path = CALIBRATION_DIR / f"{block}_raw_nuclei_intensity.csv"
-        if csv_path.exists():
+        candidates = [
+            CALIBRATION_DIR / "TMAd" / block / f"{block}_TMAd_raw_nuclei_intensity.csv",
+            CALIBRATION_DIR / "TMAe" / block / f"{block}_TMAe_raw_nuclei_intensity.csv",
+            CALIBRATION_DIR / f"{block}_TMAd_raw_nuclei_intensity.csv",
+            CALIBRATION_DIR / f"{block}_TMAe_raw_nuclei_intensity.csv",
+            CALIBRATION_DIR / f"{block}_raw_nuclei_intensity.csv",
+        ]
+        csv_path = next((p for p in candidates if p.exists()), None)
+        if csv_path is not None:
             df = pd.read_csv(csv_path)
             # 只保留需要的列
             cols_needed = ['block', 'nuclei_id'] + [f'{ch}_mean' for ch in channels]

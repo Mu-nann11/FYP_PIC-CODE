@@ -10,13 +10,13 @@ Pipeline Step 4: Grading and Molecular Subtype Classification
 5. 生成临床报告
 
 输入：
-  - {block}_features.csv（分割后的特征）
+    - {block}_{dataset}_features.csv（分割后的特征）
   - thresholds.json（已有的校准阈值）
   
 输出：
-  - {block}_features_graded_universal.csv（带分级和亚型标签）
-  - {block}_clinical_report.txt（临床报告）
-  - {block}_expression_statistics.csv（表达统计）
+        - {block}_{dataset}_features_graded_universal.csv（带分级和亚型标签）
+    - results/clinical_reports/{dataset}/{block}/{block}_{dataset}_clinical_report.txt（临床报告）
+    - results/clinical_reports/{dataset}/{block}/{block}_{dataset}_expression_statistics.csv（表达统计）
 """
 
 import json
@@ -40,6 +40,86 @@ THRESHOLD_FILE_OPTIONS = [
     CALIBRATION_DIR / "thresholds.json",
     CALIBRATION_DIR / "thresholds_raw_nuclei.json",
 ]
+
+
+def _resolve_feature_csv_path(block: str, dataset: str) -> Path:
+    """Resolve the segmentation feature CSV, with legacy fallbacks."""
+    candidates = [
+        SEGMENTATION_DIR / dataset / block / f"{block}_{dataset}_features.csv",
+        SEGMENTATION_DIR / dataset / block / f"{block}_features.csv",
+        SEGMENTATION_DIR / block / f"{block}_{dataset}_features.csv",
+        SEGMENTATION_DIR / block / f"{block}_features.csv",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return candidates[0]
+
+
+def _resolve_graded_csv_path(block: str, dataset: str) -> Path:
+    """Resolve the graded output CSV, with legacy fallbacks."""
+    candidates = [
+        SEGMENTATION_DIR / dataset / block / f"{block}_{dataset}_features_graded_universal.csv",
+        SEGMENTATION_DIR / dataset / block / f"{block}_features_graded_universal.csv",
+        SEGMENTATION_DIR / block / f"{block}_{dataset}_features_graded_universal.csv",
+        SEGMENTATION_DIR / block / f"{block}_features_graded_universal.csv",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return candidates[0]
+
+
+def _iter_feature_csv_paths():
+    """Iterate all available segmentation feature CSVs once."""
+    seen_paths = set()
+    seen_block_names = set()
+
+    for dataset in ("TMAd", "TMAe"):
+        dataset_dir = SEGMENTATION_DIR / dataset
+        if not dataset_dir.exists():
+            continue
+
+        for block_dir in dataset_dir.iterdir():
+            if not block_dir.is_dir():
+                continue
+
+            block_name = block_dir.name
+            candidates = [
+                block_dir / f"{block_name}_{dataset}_features.csv",
+                block_dir / f"{block_name}_features.csv",
+            ]
+
+            for path in candidates:
+                if path.exists():
+                    if path not in seen_paths:
+                        seen_paths.add(path)
+                        seen_block_names.add(f"{dataset}/{block_name}")
+                        yield path
+                    break
+
+    for block_dir in SEGMENTATION_DIR.iterdir():
+        if not block_dir.is_dir() or block_dir.name in ("TMAd", "TMAe"):
+            continue
+
+        if block_dir.name in {item.split("/", 1)[1] for item in seen_block_names if "/" in item}:
+            continue
+
+        candidates = [
+            block_dir / f"{block_dir.name}_features.csv",
+            block_dir / f"{block_dir.name}_TMAd_features.csv",
+            block_dir / f"{block_dir.name}_TMAe_features.csv",
+        ]
+
+        for path in candidates:
+            if path.exists() and path not in seen_paths:
+                seen_paths.add(path)
+                yield path
+                break
 
 
 def load_thresholds():
@@ -275,45 +355,42 @@ def run_grading_and_subtyping(block: str, dataset: str, force: bool = False) -> 
     try:
         logger = setup_logging("grading_and_subtyping")
         logger.info(f"Step 4: Grading and Molecular Subtype Classification for {block}")
-        
-        # Check if segmentation output exists
-        features_file = SEGMENTATION_DIR / block / f"{block}_features.csv"
-        if not features_file.exists():
-            return {
-                "status": "error",
-                "error": f"Segmentation file not found: {features_file}",
-            }
-        
-        # Load features
-        logger.info(f"Loading features from {features_file}")
-        df = pd.read_csv(features_file)
-        logger.info(f"Loaded {len(df)} cells")
-        
-        # Check for graded output (if not forcing)
-        graded_file = SEGMENTATION_DIR / block / f"{block}_features_graded_universal.csv"
+        features_file = _resolve_feature_csv_path(block, dataset)
+        graded_file = _resolve_graded_csv_path(block, dataset)
+
         if graded_file.exists() and not force:
-            logger.info(f"Graded file already exists, using cached version")
+            logger.info("Graded file already exists, using cached version")
             df = pd.read_csv(graded_file)
+            logger.info(f"Loaded {len(df)} cells from cached graded file")
+            all_thresholds = {}
         else:
+            if not features_file.exists():
+                return {
+                    "status": "error",
+                    "error": f"Segmentation file not found: {features_file}",
+                }
+
+            # Load features
+            logger.info(f"Loading features from {features_file}")
+            df = pd.read_csv(features_file)
+            logger.info(f"Loaded {len(df)} cells")
+
             # Load all data to compute Otsu thresholds
             logger.info("Loading all block data to compute Otsu thresholds...")
             all_data_df = []
-            
-            for block_path in SEGMENTATION_DIR.glob("*/"):
-                if block_path.is_dir():
-                    block_features = block_path / f"{block_path.name}_features.csv"
-                    if block_features.exists():
-                        try:
-                            all_data_df.append(pd.read_csv(block_features))
-                        except:
-                            pass
-            
+
+            for block_features in _iter_feature_csv_paths():
+                try:
+                    all_data_df.append(pd.read_csv(block_features))
+                except Exception as exc:
+                    logger.warning(f"Skipping unreadable feature file {block_features}: {exc}")
+
             if not all_data_df:
                 all_data_df = [df]
-            
+
             all_data_df = pd.concat(all_data_df, ignore_index=True)
             logger.info(f"Loaded {len(all_data_df)} total cells for threshold calculation")
-            
+
             # Calculate Otsu thresholds
             logger.info("Computing Otsu thresholds for each channel...")
             all_thresholds = {}
@@ -326,26 +403,26 @@ def run_grading_and_subtyping(block: str, dataset: str, force: bool = False) -> 
                         f"otsu_1={thresholds['otsu_1']:.2f}, "
                         f"otsu_2={thresholds['otsu_2']:.2f} ({thresholds['method']})"
                     )
-            
+
             if not all_thresholds:
                 return {
                     "status": "error",
                     "error": "Could not compute any channel thresholds",
                 }
-            
+
             # Apply grading
             logger.info("Applying grades to cells...")
             available_channels = detect_available_channels(df)
-            
+
             for channel in available_channels.keys():
                 if channel not in all_thresholds:
                     logger.warning(f"No threshold for {channel}, skipping")
                     continue
-                
+
                 thresholds = all_thresholds[channel]
                 col = f"{channel}_nuc_mean"
                 grade_col = f"{channel}_nuc_grade"
-                
+
                 df[grade_col] = df[col].apply(
                     lambda x: classify_by_otsu(
                         x,
@@ -354,7 +431,7 @@ def run_grading_and_subtyping(block: str, dataset: str, force: bool = False) -> 
                         thresholds["otsu_2"]
                     )
                 )
-            
+
             # Save graded features
             df.to_csv(graded_file, index=False)
             logger.info(f"Saved graded features to {graded_file}")
@@ -380,17 +457,17 @@ def run_grading_and_subtyping(block: str, dataset: str, force: bool = False) -> 
         logger.info("Generating clinical report...")
         report_text = generate_clinical_report(block, df, all_thresholds if 'all_thresholds' in locals() else {})
         
-        block_report_dir = CLINICAL_REPORT_DIR / block
+        block_report_dir = CLINICAL_REPORT_DIR / dataset / block
         block_report_dir.mkdir(parents=True, exist_ok=True)
         
-        report_file = block_report_dir / f"{block}_clinical_report.txt"
+        report_file = block_report_dir / f"{block}_{dataset}_clinical_report.txt"
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(report_text)
         logger.info(f"Saved clinical report to {report_file}")
         
         # Generate statistics CSV
         stats_df = calculate_expression_statistics(block, df)
-        stats_file = block_report_dir / f"{block}_expression_statistics.csv"
+        stats_file = block_report_dir / f"{block}_{dataset}_expression_statistics.csv"
         stats_df.to_csv(stats_file, index=False)
         logger.info(f"Saved expression statistics to {stats_file}")
         
@@ -493,8 +570,7 @@ def calculate_expression_statistics(block_name, df) -> pd.DataFrame:
 
 def check_grading_done(block: str, dataset: str) -> bool:
     """Check if grading is already done for a block"""
-    graded_file = SEGMENTATION_DIR / block / f"{block}_features_graded_universal.csv"
-    return graded_file.exists()
+    return _resolve_graded_csv_path(block, dataset).exists()
 
 
 def setup_logging(module_name: str):

@@ -43,6 +43,15 @@ for group, blocks in BLOCK_GROUPS.items():
         BLOCK_TO_GROUP[block].append(group)
 
 
+def infer_dataset_for_block(block_name):
+    """Infer dataset by checking segmentation feature file locations."""
+    for dataset in ["TMAd", "TMAe"]:
+        candidate = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
+        if candidate.exists():
+            return dataset
+    return None
+
+
 def calculate_otsu_thresholds():
     """
     为每个通道计算两个Otsu阈值（区分弱/中/强表达）
@@ -63,7 +72,10 @@ def calculate_otsu_thresholds():
     
     # 遍历所有block，收集强度数据
     for block_name in sorted(BLOCK_TO_GROUP.keys()):
-        features_file = SEGMENTATION_DIR / block_name / f"{block_name}_features.csv"
+        dataset = infer_dataset_for_block(block_name)
+        if dataset is None:
+            continue
+        features_file = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
         if not features_file.exists():
             continue
         
@@ -218,7 +230,11 @@ def apply_otsu_grading(otsu_results):
     all_results = []
     
     for block_name in sorted(BLOCK_TO_GROUP.keys()):
-        features_file = SEGMENTATION_DIR / block_name / f"{block_name}_features.csv"
+        dataset = infer_dataset_for_block(block_name)
+        if dataset is None:
+            print(f"  ⚠️ {block_name}: 未找到分割结果")
+            continue
+        features_file = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
         if not features_file.exists():
             print(f"  ⚠️ {block_name}: 文件不存在")
             continue
@@ -251,7 +267,7 @@ def apply_otsu_grading(otsu_results):
                         )
         
         # 保存分级后的CSV
-        output_file = SEGMENTATION_DIR / block_name / f"{block_name}_features_otsu_graded.csv"
+        output_file = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features_otsu_graded.csv"
         df.to_csv(output_file, index=False)
         
         all_results.append(df)

@@ -52,9 +52,25 @@ def classify_subtype(row):
         return 'Unknown'
 
 
+def _resolve_graded_features_path(block, base_dir):
+    for dataset in ["TMAd", "TMAe"]:
+        candidate = (
+            base_dir
+            / "results"
+            / "segmentation"
+            / dataset
+            / block
+            / f"{block}_{dataset}_features_graded_universal.csv"
+        )
+        if candidate.exists():
+            return candidate
+    legacy = base_dir / "results" / "segmentation" / block / f"{block}_features_graded_universal.csv"
+    return legacy
+
+
 def load_graded_features(block, base_dir):
     """Load graded features for a block"""
-    csv_path = base_dir / "results" / "segmentation" / block / f"{block}_features_graded_universal.csv"
+    csv_path = _resolve_graded_features_path(block, base_dir)
     
     if not csv_path.exists():
         return None

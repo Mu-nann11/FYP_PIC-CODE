@@ -16,6 +16,13 @@ REGISTERED_DIR = BASE_DIR / "results" / "registered"
 SEGMENTATION_DIR = BASE_DIR / "results" / "segmentation"
 CROP_DIR = BASE_DIR / "results" / "crop"
 
+# ==================== 负控数据输出路径（单独分支）====================
+NEGCTRL_BASE = BASE_DIR / "results" / "negative_controls"
+NEGCTRL_REGISTERED = NEGCTRL_BASE / "registered"
+NEGCTRL_SEGMENTATION = NEGCTRL_BASE / "segmentation"
+NEGCTRL_CLINICAL_REPORTS = NEGCTRL_BASE / "clinical_reports"
+NEGCTRL_PIPELINE_REPORTS = NEGCTRL_BASE / "pipeline_reports"
+
 # ==================== 环境路径 ====================
 FIJI_PATH = Path(r"D:\fiji-stable-win64-jdk\Fiji.app")
 FIJI_EXE = FIJI_PATH / "ImageJ-win64.exe"
@@ -97,20 +104,21 @@ FILENAME_TEMPLATES = {
     "stitched_cycle2": "{BLOCK}_TMAd_Cycle2_{CHANNEL}.tif",
     "stitched_tmae": "{BLOCK}_TMAe_{CHANNEL}.tif",
 
-    # Registered 输出文件名
-    "registered_dapi": "{BLOCK}_Cycle1_DAPI.tif",
-    "registered_her2": "{BLOCK}_Cycle1_HER2_aligned.tif",
-    "registered_pr": "{BLOCK}_Cycle1_PR_aligned.tif",
-    "registered_er": "{BLOCK}_Cycle1_ER_aligned.tif",
-    "registered_ki67": "{BLOCK}_KI67_aligned.tif",
-    "registered_merged": "{BLOCK}_merged_5channel.tif",
+    # Registered 输出文件名（新格式包含 Dataset）
+    "registered_cycle1_dapi": "{BLOCK}_{DATASET}_Cycle1_DAPI.tif",
+    "registered_cycle1_her2": "{BLOCK}_{DATASET}_Cycle1_HER2.tif",
+    "registered_cycle1_pr": "{BLOCK}_{DATASET}_Cycle1_PR.tif",
+    "registered_cycle1_er": "{BLOCK}_{DATASET}_Cycle1_ER.tif",
+    "registered_ki67": "{BLOCK}_{DATASET}_KI67.tif",
+    "registered_merged_5ch": "{BLOCK}_{DATASET}_merged_5channel.tif",
+    "registered_merged_4ch": "{BLOCK}_{DATASET}_merged_4channel.tif",
 
     # Segmentation 输出文件名
     "seg_cyto_masks": "{BLOCK}_cyto_masks.tif",
     "seg_nuclei_masks": "{BLOCK}_nuclei_masks.tif",
     "seg_cell_masks": "{BLOCK}_cell_masks.tif",
-    "seg_features": "{BLOCK}_features.csv",
-    "seg_features_core": "{BLOCK}_features_core.csv",
+    "seg_features": "{BLOCK}_{DATASET}_features.csv",
+    "seg_features_core": "{BLOCK}_{DATASET}_features_core.csv",
     "seg_overlay": "{BLOCK}_overlay.png",
 }
 
@@ -143,42 +151,110 @@ def get_stitched_path(block: str, dataset: str, cycle: str = None, channel: str 
     return out_dir / fname
 
 
-def get_registered_path(block: str, dataset: str, channel: str = None) -> Path:
+def _is_negative_control(block: str, dataset: str) -> bool:
     """
-    获取配准后图像的路径
+    判断 block 是否为负控数据（来自 Calculate_Data）。
+    """
+    source_type = get_block_source_type(block, dataset)
+    return source_type.startswith("calc_")
+
+
+def get_registered_path(
+    block: str,
+    dataset: str,
+    cycle: str = None,
+    channel: str = None,
+    file_type: str = None,
+) -> Path:
+    """
+    获取配准后图像的路径（支持普通样本和负控数据分离）
 
     Args:
         block: Block 名称
-        dataset: 数据集名称
+        dataset: 数据集名称（如 "TMAd" 或 "TMAe"）
         channel: 通道名称，如果为 None 则返回目录路径
     """
-    out_dir = REGISTERED_DIR / block
-    if channel is None:
-        return out_dir
+    is_negctrl = _is_negative_control(block, dataset)
 
-    channel_map = {
-        "DAPI": "registered_dapi",
-        "HER2": "registered_her2",
-        "PR": "registered_pr",
-        "ER": "registered_er",
-        "KI67": "registered_ki67",
-    }
-    fname = FILENAME_TEMPLATES[channel_map[channel.upper()]].format(BLOCK=block)
-    return out_dir / fname
+    if dataset == "TMAd":
+        if cycle is None:
+            cycle = "Cycle1"
+        if is_negctrl:
+            base_dir = NEGCTRL_REGISTERED / dataset / cycle / block
+        else:
+            base_dir = REGISTERED_DIR / dataset / cycle / block
+    else:  # TMAe
+        if is_negctrl:
+            base_dir = NEGCTRL_REGISTERED / dataset / "Cycle1" / block
+        else:
+            base_dir = REGISTERED_DIR / dataset / "Cycle1" / block
+
+    if channel is None and file_type is None:
+        return base_dir
+
+    if file_type == "merged_5ch":
+        fname = FILENAME_TEMPLATES["registered_merged_5ch"].format(
+            BLOCK=block,
+            DATASET=dataset,
+        )
+    elif file_type == "merged_4ch":
+        fname = FILENAME_TEMPLATES["registered_merged_4ch"].format(
+            BLOCK=block,
+            DATASET=dataset,
+        )
+    elif file_type == "params":
+        fname = f"{block}_alignment_params.json"
+    elif channel:
+        if channel.upper() == "DAPI":
+            fname = FILENAME_TEMPLATES["registered_cycle1_dapi"].format(
+                BLOCK=block,
+                DATASET=dataset,
+            )
+        elif channel.upper() == "HER2":
+            fname = FILENAME_TEMPLATES["registered_cycle1_her2"].format(
+                BLOCK=block,
+                DATASET=dataset,
+            )
+        elif channel.upper() == "PR":
+            fname = FILENAME_TEMPLATES["registered_cycle1_pr"].format(
+                BLOCK=block,
+                DATASET=dataset,
+            )
+        elif channel.upper() == "ER":
+            fname = FILENAME_TEMPLATES["registered_cycle1_er"].format(
+                BLOCK=block,
+                DATASET=dataset,
+            )
+        elif channel.upper() == "KI67":
+            fname = FILENAME_TEMPLATES["registered_ki67"].format(
+                BLOCK=block,
+                DATASET=dataset,
+            )
+        else:
+            fname = f"{block}_{channel.upper()}.tif"
+    else:
+        fname = None
+
+    return base_dir / fname if fname else base_dir
 
 
 def get_segmentation_path(block: str, dataset: str, file_type: str = None) -> Path:
     """
-    获取分割结果的路径
+    获取分割结果的路径（统一按 dataset/block 组织）
 
     Args:
         block: Block 名称
         dataset: 数据集名称
         file_type: 文件类型，如 "features", "overlay", "cell_masks" 等
+
+    Returns:
+        Path: 分割结果文件的路径
     """
-    out_dir = SEGMENTATION_DIR / block
+    # Current standard layout: results/segmentation/{dataset}/{block}/
+    base_dir = SEGMENTATION_DIR / dataset / block
+
     if file_type is None:
-        return out_dir
+        return base_dir
 
     type_map = {
         "features": "seg_features",
@@ -188,8 +264,8 @@ def get_segmentation_path(block: str, dataset: str, file_type: str = None) -> Pa
         "nuclei_masks": "seg_nuclei_masks",
         "cell_masks": "seg_cell_masks",
     }
-    fname = FILENAME_TEMPLATES[type_map[file_type]].format(BLOCK=block)
-    return out_dir / fname
+    fname = FILENAME_TEMPLATES[type_map[file_type]].format(BLOCK=block, DATASET=dataset)
+    return base_dir / fname
 
 
 def get_block_source_type(block: str, dataset: str) -> str:

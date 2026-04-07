@@ -4,7 +4,7 @@
 数据依赖：
     阴性 Block 需要先经过 Step 1 (Fiji Stitching) + Step 2 (Alignment)
     → 输出拼接配准后的图像 → 再跑 Step 3 (Segmentation) 获得细胞掩码和特征。
-    分割特征 CSV 输出至 results/segmentation/{block}/{block}_features.csv
+    分割特征 CSV 输出至 results/segmentation/{dataset}/{block}/{block}_{dataset}_features.csv
 
 分割输出 CSV 列名约定（来自 cpsam_cyto_to_nucleus.py）：
     - DAPI_nuc_mean, HER2_nuc_mean, HER2_cyto_only_mean, HER2_nuc_cyto_ratio
@@ -33,7 +33,7 @@ RAW_DATA_DIR = BASE_DIR / "Raw_Data"
 
 # ==================== 分割结果路径 ====================
 # Step 3 (Segmentation) 输出的特征 CSV
-# 输出结构：results/segmentation/{block}/{block}_features.csv
+# 输出结构：results/segmentation/{dataset}/{block}/{block}_{dataset}_features.csv
 SEGMENTATION_DIR = BASE_DIR / "results" / "segmentation"
 
 # ==================== 校准输出路径 ====================
@@ -122,7 +122,7 @@ NEGATIVE_BLOCKS = {
 # 填入 TMAd Cycle1 主 Block（G2/B8/A10/J10 等）
 HER2_POSITIVE_BLOCKS = {
     # 手动指定含有 HER2 阳性的 Block
-    # 分割结果路径：results/segmentation/{block}/{block}_features.csv
+    # 分割结果路径：results/segmentation/{dataset}/{block}/{block}_{dataset}_features.csv
     "blocks": [],
     # HER2 强度来源（与 NEGATIVE_BLOCKS 中保持一致）
     "column": "HER2_cyto_only_mean",
@@ -186,17 +186,27 @@ def get_neg_segmentation_root(neg_key: str) -> Path:
 def get_neg_feature_csv(block: str, neg_key: str) -> Optional[Path]:
     """获取单个阴性 Block 的分割特征 CSV 路径。"""
     seg_root = get_neg_segmentation_root(neg_key)
-    # 分割输出结构：{seg_root}/{block}/{block}_features.csv
-    block_dir = seg_root / block
-    csv_path = block_dir / f"{block}_features.csv"
-    return csv_path if csv_path.exists() else None
+    candidates = [
+        seg_root / "TMAd" / block / f"{block}_TMAd_features.csv",
+        seg_root / block / f"{block}_features.csv",  # legacy
+    ]
+    for csv_path in candidates:
+        if csv_path.exists():
+            return csv_path
+    return None
 
 
 def get_pos_feature_csv(block: str) -> Optional[Path]:
     """获取 HER2 阳性参考 Block 的分割特征 CSV 路径。"""
-    block_dir = SEGMENTATION_DIR / block
-    csv_path = block_dir / f"{block}_features.csv"
-    return csv_path if csv_path.exists() else None
+    candidates = [
+        SEGMENTATION_DIR / "TMAd" / block / f"{block}_TMAd_features.csv",
+        SEGMENTATION_DIR / "TMAe" / block / f"{block}_TMAe_features.csv",
+        SEGMENTATION_DIR / block / f"{block}_features.csv",  # legacy
+    ]
+    for csv_path in candidates:
+        if csv_path.exists():
+            return csv_path
+    return None
 
 
 def auto_discover_neg_blocks(neg_key: str) -> list:
@@ -204,10 +214,19 @@ def auto_discover_neg_blocks(neg_key: str) -> list:
     seg_root = get_neg_segmentation_root(neg_key)
     if not seg_root.exists():
         return []
-    discovered = [
-        d.name for d in seg_root.iterdir()
-        if d.is_dir() and (d / f"{d.name}_features.csv").exists()
-    ]
+    discovered = set()
+
+    tmad_root = seg_root / "TMAd"
+    if tmad_root.exists():
+        for d in tmad_root.iterdir():
+            if d.is_dir() and (d / f"{d.name}_TMAd_features.csv").exists():
+                discovered.add(d.name)
+
+    # legacy layout fallback
+    for d in seg_root.iterdir():
+        if d.is_dir() and (d / f"{d.name}_features.csv").exists():
+            discovered.add(d.name)
+
     return sorted(discovered)
 
 

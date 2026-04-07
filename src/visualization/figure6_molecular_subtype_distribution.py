@@ -16,8 +16,22 @@ RESULTS_DIR = Path(r"d:\Try_munan\FYP_LAST\results")
 OUTPUT_DIR = RESULTS_DIR / "figures"
 GRADING_DIR = RESULTS_DIR / "grading"
 
+
+def get_all_available_blocks():
+    """Dynamically discover all blocks from TMAd and TMAe segmentation directories."""
+    blocks = []
+    for dataset in ["TMAd", "TMAe"]:
+        dataset_dir = RESULTS_DIR / "segmentation" / dataset
+        if not dataset_dir.exists():
+            continue
+        for block_dir in dataset_dir.iterdir():
+            if block_dir.is_dir():
+                blocks.append(block_dir.name)
+    return sorted(set(blocks))
+
+
 # Blocks to process
-BLOCKS = ["A1", "A8", "D1", "E10", "G1", "H10", "H2", "J10"]
+BLOCKS = get_all_available_blocks()
 
 # Subtype definitions (St. Gallen consensus)
 # Using grade columns: 0=negative, 1=low positive, 2=high positive
@@ -74,7 +88,14 @@ def classify_subtype(row):
 
 def load_and_classify(block):
     """Load features for a block and classify cells"""
-    csv_path = RESULTS_DIR / "segmentation" / block / f"{block}_features_graded_universal.csv"
+    csv_path = None
+    for dataset in ["TMAd", "TMAe"]:
+        candidate = RESULTS_DIR / "segmentation" / dataset / block / f"{block}_{dataset}_features_graded_universal.csv"
+        if candidate.exists():
+            csv_path = candidate
+            break
+    if csv_path is None:
+        csv_path = RESULTS_DIR / "segmentation" / block / f"{block}_features_graded_universal.csv"
 
     if not csv_path.exists():
         print(f"  Warning: {csv_path} not found")

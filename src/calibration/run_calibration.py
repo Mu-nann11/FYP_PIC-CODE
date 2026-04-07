@@ -22,8 +22,7 @@
     1. Step 1 (Fiji Stitching) - 瓦片拼接
     2. Step 2 (Alignment)       - Cycle1/Cycle2 配准
     3. Step 3 (Segmentation)    - 细胞分割与特征提取
-       → 输出: results/segmentation/3ch_Neg/{block}_features.csv
-       → 输出: results/segmentation/Ki67_Neg/{block}_features.csv
+    → 输出: results/segmentation/{dataset}/{block}/{block}_{dataset}_features.csv
 
 输出文件:
     results/calibration/
@@ -65,6 +64,7 @@ from calibration.config import (
     NEGATIVE_BLOCKS,
     HER2_POSITIVE_BLOCKS,
     CALIBRATION_PARAMS,
+    get_pos_feature_csv,
 )
 # 延迟导入：numpy/matplotlib/skimage 仅在执行校准时才加载（不由 --list-negative 触发）
 
@@ -173,7 +173,7 @@ def check_prerequisites(neg_blocks: dict, her2_blocks: list = None, quiet: bool 
             msg = (
                 f"  {status} {group_key}: 未找到分割结果！\n"
                 f"    请先运行 Step 3 Segmentation，期望路径：\n"
-                f"    {seg_root}/<block>/<block>_features.csv"
+                f"    {seg_root}/<dataset>/<block>/<block>_<dataset>_features.csv"
             )
             print(msg)
             ok = False
@@ -201,8 +201,8 @@ def check_prerequisites(neg_blocks: dict, her2_blocks: list = None, quiet: bool 
 
     if her2_blocks:
         for block in her2_blocks:
-            csv_path = SEGMENTATION_DIR / block / f"{block}_features.csv"
-            if csv_path.exists():
+            csv_path = get_pos_feature_csv(block)
+            if csv_path is not None and csv_path.exists():
                 status = "✓"
                 if not quiet:
                     print(f"  {status} HER2_Otsu[{block}]: 存在")

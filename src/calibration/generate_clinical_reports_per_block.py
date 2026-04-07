@@ -6,7 +6,7 @@
 1. 逐个block计算该block内的阳性细胞Otsu阈值
 2. 对该block内的细胞进行四级分类
 3. 为该block生成独立的临床诊断报告
-4. 输出结构: results/clinical_reports/{block}/{block}_clinical_report.txt
+4. 输出结构: results/clinical_reports/{dataset}/{block}/{block}_{dataset}_clinical_report.txt
 """
 
 import json
@@ -54,6 +54,15 @@ def classify_by_threshold(intensity, neg_threshold, std_dev):
         return 3
 
 
+def infer_dataset_for_block(block_name):
+    """Infer dataset by checking segmentation file locations."""
+    for dataset in ["TMAd", "TMAe"]:
+        candidate = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
+        if candidate.exists():
+            return dataset
+    return None
+
+
 def classify_by_otsu(intensity, neg_threshold, otsu_1, otsu_2):
     """使用Otsu方法分级"""
     if pd.isna(intensity) or intensity == 0:
@@ -80,7 +89,12 @@ def process_single_block(block_name):
     thresholds = json.load(open(THRESHOLD_FILE))
     
     # 读取该block的特征文件
-    features_file = SEGMENTATION_DIR / block_name / f"{block_name}_features.csv"
+    dataset = infer_dataset_for_block(block_name)
+    if dataset is None:
+        print(f"⚠️ 未找到 {block_name} 的分割结果（TMAd/TMAe）")
+        return None
+
+    features_file = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features.csv"
     if not features_file.exists():
         print(f"⚠️ 文件不存在: {features_file}")
         return None
@@ -249,7 +263,7 @@ def process_single_block(block_name):
                     )
     
     # 保存分级后的CSV
-    output_csv = SEGMENTATION_DIR / block_name / f"{block_name}_features_graded.csv"
+    output_csv = SEGMENTATION_DIR / dataset / block_name / f"{block_name}_{dataset}_features_graded.csv"
     df.to_csv(output_csv, index=False)
     print(f"✓ 分级数据已保存: {output_csv.name}\n")
     
@@ -257,13 +271,13 @@ def process_single_block(block_name):
     print("📝 生成临床诊断报告...\n")
     
     # 建立输出目录
-    report_dir = CLINICAL_REPORT_DIR / block_name
+    report_dir = CLINICAL_REPORT_DIR / dataset / block_name
     report_dir.mkdir(parents=True, exist_ok=True)
     
     # 生成完整版报告
     report_text = generate_report(block_name, total_cells, otsu_results, df)
     
-    report_file = report_dir / f"{block_name}_clinical_report.txt"
+    report_file = report_dir / f"{block_name}_{dataset}_clinical_report.txt"
     with open(report_file, 'w', encoding='utf-8') as f:
         f.write(report_text)
     print(f"✓ 完整版报告已保存: {report_file}")
@@ -289,7 +303,7 @@ def process_single_block(block_name):
         })
     
     summary_df = pd.DataFrame(summary_data)
-    summary_csv = report_dir / f"{block_name}_expression_statistics.csv"
+    summary_csv = report_dir / f"{block_name}_{dataset}_expression_statistics.csv"
     summary_df.to_csv(summary_csv, index=False)
     print(f"✓ 统计表已保存: {summary_csv.name}\n")
     
@@ -323,7 +337,7 @@ def process_single_block(block_name):
                        f'{int(count)}', ha='center', va='bottom', fontsize=10)
     
     plt.tight_layout()
-    hist_file = report_dir / f"{block_name}_grading_distribution.png"
+    hist_file = report_dir / f"{block_name}_{dataset}_grading_distribution.png"
     plt.savefig(hist_file, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ 分布直方图已保存: {hist_file.name}\n")
@@ -433,10 +447,13 @@ def main():
     print(f"\n输出位置: {CLINICAL_REPORT_DIR}")
     print("输出结构:")
     for block in all_blocks:
-        print(f"  {block}/")
-        print(f"    ├─ {block}_clinical_report.txt")
-        print(f"    ├─ {block}_expression_statistics.csv")
-        print(f"    └─ {block}_grading_distribution.png")
+        dataset = infer_dataset_for_block(block)
+        if dataset is None:
+            continue
+        print(f"  {dataset}/{block}/")
+        print(f"    ├─ {block}_{dataset}_clinical_report.txt")
+        print(f"    ├─ {block}_{dataset}_expression_statistics.csv")
+        print(f"    └─ {block}_{dataset}_grading_distribution.png")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,17 @@ OUTPUT_DIR = RESULTS_DIR / "figures"
 
 # Select a representative block with good data
 SAMPLE_BLOCK = "H2"
-CSV_PATH = RESULTS_DIR / "segmentation" / SAMPLE_BLOCK / f"{SAMPLE_BLOCK}_features_graded_universal.csv"
+
+
+def resolve_graded_csv(block):
+    for dataset in ["TMAd", "TMAe"]:
+        candidate = RESULTS_DIR / "segmentation" / dataset / block / f"{block}_{dataset}_features_graded_universal.csv"
+        if candidate.exists():
+            return candidate
+    return RESULTS_DIR / "segmentation" / block / f"{block}_features_graded_universal.csv"
+
+
+CSV_PATH = resolve_graded_csv(SAMPLE_BLOCK)
 
 
 def create_feature_preview():
@@ -171,7 +181,7 @@ def create_summary_statistics():
 
     all_stats = []
     for block in blocks:
-        csv_path = RESULTS_DIR / "segmentation" / block / f"{block}_features_graded_universal.csv"
+        csv_path = resolve_graded_csv(block)
         if csv_path.exists():
             df = pd.read_csv(csv_path)
             total = len(df)

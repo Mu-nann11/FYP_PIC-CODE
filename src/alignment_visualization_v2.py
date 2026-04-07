@@ -7,12 +7,12 @@ import argparse
 
 
 # ============================================================
-# 核心: 带背景减除的归一化（替代你之前的 normalize_channel）
+# Core: normalization with background subtraction (replaces the earlier normalize_channel)
 # ============================================================
 
 def estimate_background(img, method='mode'):
     """
-    自动估计图像背景值
+    Estimate the image background value automatically.
     """
     img_flat = img.ravel()
 
@@ -40,7 +40,7 @@ def estimate_background(img, method='mode'):
 
 def normalize_channel(img, low_pct=1.0, high_pct=99.8, subtract_bg=True, bg_method='percentile'):
     """
-    模拟 QuPath/Fiji 的 Brightness/Contrast 调整
+    Simulate QuPath/Fiji brightness/contrast adjustment.
     """
     img = img.astype(np.float64)
 
@@ -51,7 +51,7 @@ def normalize_channel(img, low_pct=1.0, high_pct=99.8, subtract_bg=True, bg_meth
             bg = np.percentile(img, low_pct)
             
         signal_max = np.percentile(img, high_pct)
-        # 关键: 减去背景基底，薄膜就消失了
+        # Key: subtract the background baseline so the film disappears.
         img = img - bg
         if signal_max - bg < 1:
             return np.zeros_like(img)
@@ -67,7 +67,7 @@ def normalize_channel(img, low_pct=1.0, high_pct=99.8, subtract_bg=True, bg_meth
 
 
 # ============================================================
-# 通道合成
+# Channel compositing
 # ============================================================
 
 def composite_dapi_ki67(dapi, ki67,
@@ -76,7 +76,7 @@ def composite_dapi_ki67(dapi, ki67,
                         ki67_gamma=1.0,
                         ki67_bg_method='percentile'):
     """
-    DAPI (蓝) + Ki67 (品红) 合成
+    DAPI (blue) + Ki67 (magenta) composite.
     """
     d = normalize_channel(dapi, low_pct=dapi_low, high_pct=dapi_high)
     k = normalize_channel(ki67, low_pct=ki67_low, high_pct=ki67_high, bg_method=ki67_bg_method)
@@ -86,8 +86,8 @@ def composite_dapi_ki67(dapi, ki67,
 
     rgb = np.zeros((*d.shape, 3), dtype=np.float64)
     rgb[..., 0] = k                 # R = Ki67
-    rgb[..., 1] = 0.0               # G = 空
-    rgb[..., 2] = d * 0.85 + k * 0.3  # B = DAPI为主
+    rgb[..., 1] = 0.0               # G = empty
+    rgb[..., 2] = d * 0.85 + k * 0.3  # B = DAPI-dominant
 
     return np.clip(rgb, 0, 1)
 
@@ -96,7 +96,7 @@ def composite_dapi_er(dapi, er,
                       dapi_low=1.0, dapi_high=99.8,
                       er_low=2.0, er_high=99.5):
     """
-    DAPI (蓝) + ER (绿) 合成
+    DAPI (blue) + ER (green) composite.
     """
     d = normalize_channel(dapi, low_pct=dapi_low, high_pct=dapi_high)
     e = normalize_channel(er, low_pct=er_low, high_pct=er_high)
@@ -110,7 +110,7 @@ def composite_dapi_er(dapi, er,
 
 
 # ============================================================
-# 可视化
+# Visualization
 # ============================================================
 
 def make_comparison(
@@ -126,9 +126,9 @@ def make_comparison(
     dpi=200,
 ):
     """
-    Before / After 对比图
+    Before / After comparison figure.
     """
-    # 避免 before 或 after 通道大小不一致（通常在配准前 Cycle 1/2 会有少许尺寸差异）
+    # Avoid mismatched before/after channel sizes (Cycle 1/2 can differ slightly before alignment).
     min_h_b = min(dapi_before.shape[0], ki67_before.shape[0])
     min_w_b = min(dapi_before.shape[1], ki67_before.shape[1])
     dapi_before = dapi_before[:min_h_b, :min_w_b]
@@ -161,7 +161,7 @@ def make_comparison(
         ki67_bg_method=ki67_bg_method,
     )
 
-    # ---- 画图 ----
+    # ---- Plotting ----
     fig = plt.figure(figsize=(18, 8.5), facecolor='#0a0a0a')
     gs = GridSpec(1, 3, width_ratios=[1, 1, 0.06], wspace=0.03,
                   left=0.03, right=0.97, top=0.90, bottom=0.06)
@@ -179,13 +179,13 @@ def make_comparison(
                      fontweight='bold', pad=10)
         ax.axis('off')
 
-    # 图例
+    # Legend
     _draw_legend(cax)
 
-    # 参数信息
+    # Parameter info
     fig.suptitle(title, color='white', fontsize=16, fontweight='bold', y=0.96)
 
-    # 底部参数标注
+    # Bottom parameter label
     param_text = (f"DAPI: pct=[{dapi_low}, {dapi_high}]  |  "
                   f"Ki67: bg={ki67_bg_method}, high_pct={ki67_high}  |  "
                   f"Ki67 γ={ki67_gamma}")
@@ -223,12 +223,12 @@ def _draw_legend(ax):
 
 
 # ============================================================
-# 调试工具: 帮你找最佳百分位参数
+# Debug tool: help find the best percentile parameters
 # ============================================================
 
 def debug_channel(img, channel_name="channel", save_path=None):
     """
-    画单通道的直方图 + 不同百分位截断的预览
+    Plot a single-channel histogram and previews with different percentile cuts.
     """
     bg_mode = estimate_background(img, 'mode')
     bg_low  = estimate_background(img, 'low')
